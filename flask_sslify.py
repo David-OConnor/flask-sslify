@@ -8,7 +8,8 @@ YEAR_IN_SECS = 31536000
 class SSLify(object):
     """Secures your Flask App."""
 
-    def __init__(self, app=None, age=YEAR_IN_SECS, subdomains=False, permanent=False, skips=None):
+    def __init__(self, app=None, age=YEAR_IN_SECS, subdomains=False,
+                 permanent=False, skips=None, includes=None):
         self.app = app or current_app
         self.hsts_age = age
 
@@ -19,6 +20,7 @@ class SSLify(object):
         self.hsts_include_subdomains = subdomains or self.app.config['SSLIFY_SUBDOMAINS']
         self.permanent = permanent or self.app.config['SSLIFY_PERMANENT']
         self.skip_list = skips or self.app.config['SSLIFY_SKIPS']
+        self.include_list = includes or self.app.config['SSLIFY_INCLUDES']
 
         if app is not None:
             self.init_app(app)
@@ -42,9 +44,20 @@ class SSLify(object):
     def skip(self):
         """Checks the skip list."""
         # Should we skip?
-        if self.skip_list and isinstance(self.skip_list, list): 
+        if self.skip_list and isinstance(self.skip_list, list):
             for skip in self.skip_list:
                 if request.path.startswith('/{0}'.format(skip)):
+                    return True
+        return False
+
+    # Custom addition. Requires url to be in includes to work.
+    @property
+    def include(self):
+        """Checks the include list."""
+        # Should we include?
+        if self.include_list and isinstance(self.include_list, list):
+            for include in self.include_list:
+                if request.path.startswith('/{0}'.format(include)):
                     return True
         return False
 
@@ -58,6 +71,11 @@ class SSLify(object):
         ]
 
         if not any(criteria) and not self.skip:
+            # If the include list exists, only apply ssl redirects to urls
+            # in that list.
+            if self.include_list and isinstance(self.include_list, list):
+                if not self.include:
+                    return
             if request.url.startswith('http://'):
                 url = request.url.replace('http://', 'https://', 1)
                 code = 302
